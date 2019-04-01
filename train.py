@@ -9,6 +9,9 @@ import tqdm
 from model import G, D
 
 
+#####################################################################
+# Constant
+#####################################################################
 dataset_dir = "cifar10/"
 batch_size = 32
 learning_rate = 1e-4
@@ -18,6 +21,9 @@ clamp_num = 0.01
 num_workers = 16
 
 
+#####################################################################
+# Data Loader
+#####################################################################
 transforms = T.Compose([
     T.Resize(64),
     T.ToTensor(),
@@ -39,7 +45,9 @@ fix_noises = torch.randn(batch_size, 100, 1, 1)
 fix_noises = fix_noises.cuda()
 
 
-# G, D
+#####################################################################
+# Create Discriminator & Generator
+#####################################################################
 def init_weights(m):
     class_name = m.__class__.__name__
     if class_name.find('Conv') != -1:
@@ -64,18 +72,14 @@ G.train()
 D.train()
 
 
-# loss
-# optimizer
+#####################################################################
+# Optimizer
+#####################################################################
 G_optimizer = torch.optim.RMSprop(G.parameters(), lr=learning_rate)
 D_optimizer = torch.optim.RMSprop(D.parameters(), lr=learning_rate)
 
-ones = torch.ones(batch_size, 1, 1, 1) 
-nones = -1 * torch.ones(batch_size, 1, 1, 1) 
-ones = ones.cuda()
-nones = nones.cuda()
-
 for epoch in range(num_epochs):
-    for index, (image, _) in tqdm.tqdm(enumerate(train_dataloader)): # train_data is a list with length 2. [image data, image label]
+    for index, (image, _) in tqdm.tqdm(enumerate(train_dataloader)):
         real_image = Variable(image)
         real_image = real_image.cuda()
 
@@ -91,20 +95,14 @@ for epoch in range(num_epochs):
             
             real_pred = D(real_image)
             D_loss_real = torch.sum(real_pred)
-            #D_loss_real.backward(nones)
 
             noises.data.normal_()
             fake_image = G(noises).detach() # fake_image.requires_grad => False
             fake_pred = D(fake_image)
             D_loss_fake = -1 * torch.sum(fake_pred)
-            #D_loss_fake.backward(ones)
 
-            #D_loss = (D_loss_fake + D_loss_real) / batch_size
-            D_loss = D_loss_fake + D_loss_real
+            D_loss = (D_loss_fake + D_loss_real) / batch_size
             
-
-            #D_loss = D_loss_real + D_loss_fake
-            #D_loss.backward()
             D_loss.backward()
             D_optimizer.step()
 
@@ -117,15 +115,17 @@ for epoch in range(num_epochs):
             noises.data.normal_()
             fake_image = G(noises)
             fake_pred = D(fake_image)
-            #G_loss = torch.sum(fake_pred) / batch_size
-            G_loss = torch.sum(fake_pred)
-            #G_loss.backward(nones)
+            G_loss = (torch.sum(fake_pred)) / batch_size
             G_loss.backward()
             G_optimizer.step()
             
         if index % 10 == 0:
             print('epoch {}: D loss={}; G loss={}'.format(epoch, D_loss, G_loss))
     
+
+    #####################################################################
+    # Eval
+    #####################################################################
     G.eval()
     D.eval()
     print('saving...')
